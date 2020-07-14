@@ -168,11 +168,17 @@ public struct Theme {
         let fontSize: CGFloat = attributes["size"] as? CGFloat ?? (bodyFont?.pointSize ?? 15)
         let fontTraits = attributes["traits"] as? String ?? ""
         var font: UniversalFont?
+        let systemFontName = UniversalFont.systemFont(ofSize: 1).fontName
         
-        if let fontName = attributes["font"] as? String, fontName != "System" {
-            // use custom font if set
-            font = UniversalFont(name: fontName, size: fontSize)?.with(traits: fontTraits, size: fontSize)
-        } else if let bodyFont = bodyFont, bodyFont.fontName != "System" {
+        if let fontName = attributes["font"] as? String {
+            if fontName == "System" {
+                // allow explicit system font use in styles other than body
+                font = UniversalFont.systemFont(ofSize: fontSize).with(traits: fontTraits, size: fontSize)
+            } else {
+                // use custom font if set
+                font = UniversalFont(name: fontName, size: fontSize)?.with(traits: fontTraits, size: fontSize)
+            }
+        } else if let bodyFont = bodyFont, bodyFont.fontName != systemFontName {
             // use body font if set
             font = UniversalFont(name: bodyFont.fontName, size: fontSize)?.with(traits: fontTraits, size: fontSize)
         } else {
