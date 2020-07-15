@@ -123,18 +123,18 @@ public class Storage: NSTextStorage {
         let backingString = backingStore.string
         backingStore.setAttributes(theme.body.attributes, range: range)
 
-        for (style) in theme.styles {
+        for style in theme.styles {
             style.regex.enumerateMatches(in: backingString, options: .withoutAnchoringBounds, range: range, using: { (match, flags, stop) in
                 guard let match = match else { return }
                 
                 backingStore.addAttributes(style.attributes, range: match.range(at: 0))
                 if #available(iOS 11.0, *) {
-                    if let groups = style.groups {
-                        for group in groups {
-                            if let groupStyle = theme.style(withName: group) {
-                                let range = match.range(withName: group)
-                                backingStore.addAttributes(groupStyle.attributes, range: range)
-                            }
+                    if let subStyles = style.styles {
+                        for groupStyle in subStyles {
+                            guard let groupName = groupStyle.name else { continue }
+                            
+                            let range = match.range(withName: groupName)
+                            backingStore.addAttributes(groupStyle.attributes, range: range)
                         }
                     }
                 }

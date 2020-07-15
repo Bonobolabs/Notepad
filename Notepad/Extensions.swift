@@ -87,7 +87,7 @@ extension String {
 extension UniversalFont {
     func with(traits: String, size: CGFloat) -> UniversalFont? {
         guard let traits = getTraits(from: traits) else {
-            return self
+            return self.withSize(size)
         }
         let descriptor = fontDescriptor.withSymbolicTraits(traits) ?? UniversalFontDescriptor(fontAttributes: [:])
         return UniversalFont(descriptor: descriptor, size: size)

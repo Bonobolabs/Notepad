@@ -102,14 +102,13 @@ public struct Theme {
 
         if var allStyles = data["styles"] as? [String: AnyObject] {
             if let bodyStyles = allStyles["body"] as? [String: AnyObject] {
-                if var parsedBodyStyles = parse(bodyStyles) {
-                    if #available(iOS 13.0, *) {
-                        if parsedBodyStyles[NSAttributedString.Key.foregroundColor] == nil {
-                            parsedBodyStyles[NSAttributedString.Key.foregroundColor] = UniversalColor.label
-                        }
+                var parsedBodyStyles = parse(bodyStyles)
+                if #available(iOS 13.0, *) {
+                    if parsedBodyStyles[NSAttributedString.Key.foregroundColor] == nil {
+                        parsedBodyStyles[NSAttributedString.Key.foregroundColor] = UniversalColor.label
                     }
-                    body = Style(element: .body, attributes: parsedBodyStyles)
                 }
+                body = Style(element: .body, attributes: parsedBodyStyles)
             }
             else { // Create a default body font so other styles can inherit from it.
                 var textColor = UniversalColor.black
@@ -122,18 +121,33 @@ public struct Theme {
 
             allStyles.removeValue(forKey: "body")
             for (element, attributes) in allStyles {
-                if let parsedStyles = parse(attributes as! [String : AnyObject]) {
-                    let groups = attributes["groups"] as? [String]
-                    
-                    if let regexString = attributes["regex"] as? String {
-                        let regex = regexString.toRegex()
-                        styles.append(Style(regex: regex, attributes: parsedStyles, groups: groups, name: element))
-                    } else {
-                        styles.append(Style(element: Element.unknown.from(string: element), attributes: parsedStyles, groups: groups, name: element))
-                    }
-                }
+                styles.append(createStyle(element: element, attributes: attributes as! [String : AnyObject], allStyles: allStyles))
             }
         }
+    }
+    
+    mutating func createStyle(element: String, attributes: [String: AnyObject], allStyles: [String : AnyObject], parent: Style? = nil) -> Style {
+        
+        var style: Style
+        let parsedStyles = parse(attributes, parentStyle: parent)
+        if let regexString = attributes["regex"] as? String {
+            let regex = regexString.toRegex()
+            style = Style(regex: regex, attributes: parsedStyles, name: element)
+        } else {
+            style = Style(element: Element.unknown.from(string: element), attributes: parsedStyles, name: element)
+        }
+        
+        if let groups = attributes["groups"] as? [String] {
+            var subStyles = [Style]()
+            for group in groups {
+                if let subAttribs = allStyles[group] {
+                    subStyles.append(createStyle(element: group, attributes: subAttribs as! [String : AnyObject], allStyles: allStyles, parent: style))
+                }
+            }
+            style.styles = subStyles
+        }
+        
+        return style
     }
 
     /// Sets the background color, tint color, etc. of the Notepad editor.
@@ -156,19 +170,20 @@ public struct Theme {
     /// - parameter attributes: The attributes to parse.
     ///
     /// - returns: The converted attribute/key constant pairings.
-    func parse(_ attributes: [String: AnyObject]) -> [NSAttributedString.Key: Any]? {
+    func parse(_ attributes: [String: AnyObject]?, parentStyle: Style? = nil) -> [NSAttributedString.Key: Any] {
         var stringAttributes: [NSAttributedString.Key: Any] = [:]
+        
+        guard let attributes = attributes else { return stringAttributes }
 
         if let color = attributes["color"] as? String {
             stringAttributes[NSAttributedString.Key.foregroundColor] = UniversalColor(hexString: color)
         }
         
-        let bodyFont = body.attributes[NSAttributedString.Key.font] as? UniversalFont
+        let parentFont = (parentStyle?.attributes[NSAttributedString.Key.font] ?? body.attributes[NSAttributedString.Key.font]) as? UniversalFont
         // if size is set use custom size, otherwise use body font size, otherwise fallback to 15 points
-        let fontSize: CGFloat = attributes["size"] as? CGFloat ?? (bodyFont?.pointSize ?? 15)
+        let fontSize: CGFloat = attributes["size"] as? CGFloat ?? (parentFont?.pointSize ?? 15)
         let fontTraits = attributes["traits"] as? String ?? ""
         var font: UniversalFont?
-        let systemFontName = UniversalFont.systemFont(ofSize: 1).fontName
         
         if let fontName = attributes["font"] as? String {
             if fontName == "System" {
@@ -178,15 +193,16 @@ public struct Theme {
                 // use custom font if set
                 font = UniversalFont(name: fontName, size: fontSize)?.with(traits: fontTraits, size: fontSize)
             }
-        } else if let bodyFont = bodyFont, bodyFont.fontName != systemFontName {
-            // use body font if set
-            font = UniversalFont(name: bodyFont.fontName, size: fontSize)?.with(traits: fontTraits, size: fontSize)
+        } else if let parentFont = parentFont {
+            // use parent font if set
+            font = parentFont.with(traits: fontTraits, size: fontSize)
         } else {
-            // use system font in all other cases
-            font = UniversalFont.systemFont(ofSize: fontSize).with(traits: fontTraits, size: fontSize)
+            // No fallback to "System" - use whatever is already set on the attributed string.
         }
-
-        stringAttributes[NSAttributedString.Key.font] = font
+        if font != nil {
+            stringAttributes[NSAttributedString.Key.font] = font
+        }
+        
         return stringAttributes
     }
 
